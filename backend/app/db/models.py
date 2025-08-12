@@ -24,8 +24,9 @@ class ReportStatus(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
     user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = Column(String, nullable=False, unique=True) # Anonymized by default
-    email = Column(String, nullable=False, unique=True) # Will be encrypted
+    username = Column(String, nullable=False, unique=True)
+    email = Column(String, nullable=False, unique=True)
+    hashed_password = Column(String, nullable=False) # <--- ADD THIS LINE
     points = Column(Integer, default=0)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
 

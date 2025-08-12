@@ -1,3 +1,7 @@
-fastAPI
-uuid
-sqlalchemy
+fastapi
+uvicorn[standard]
+SQLAlchemy
+psycopg2-binary
+python-dotenv
+alembic
+sqlalchemy-utils

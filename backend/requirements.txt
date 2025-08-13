@@ -6,3 +6,4 @@ python-dotenv
 alembic
 sqlalchemy-utils
 passlib[bcrypt]
+pydantic[email]

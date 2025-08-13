@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -6,15 +5,13 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# --- CUSTOM ADDITIONS START ---
-
-# This line loads the .env file at the start
-load_dotenv()
-
 # This imports your models' Base, so Alembic can find your tables
 from app.db.models import Base
 
-# --- CUSTOM ADDITIONS END ---
+# --- THIS IS THE KEY CHANGE ---
+# We import our app's settings to get the database URL directly
+from app.core.config import settings
+# -----------------------------
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -25,26 +22,14 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# --- TARGET METADATA ---
-# For 'autogenerate' support, this is the most important part.
-# It tells Alembic what tables your application has.
+
 target_metadata = Base.metadata
-# --- END TARGET METADATA ---
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
-    """
-    url = config.get_main_option("sqlalchemy.url")
+    """Run migrations in 'offline' mode."""
+    # This mode is not typically used with our setup, but we leave it here.
+    url = settings.DATABASE_URL # Get URL from our settings
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -57,17 +42,20 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
+    """Run migrations in 'online' mode."""
+    
+    # --- THIS SECTION IS MODIFIED ---
+    # Create a configuration dictionary from the .ini file
+    configuration = config.get_section(config.config_ini_section)
+    # Set the 'sqlalchemy.url' key using our app's settings object
+    configuration["sqlalchemy.url"] = settings.DATABASE_URL
+    
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    # --------------------------------
 
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)

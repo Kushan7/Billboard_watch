@@ -2,8 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.schemas import user as user_schema
 from app.services import user_service
-from app.db.database import get_db
-
+from ..db.database import get_db
 router = APIRouter()
 
 @router.post("/users/", response_model=user_schema.User, status_code=201)

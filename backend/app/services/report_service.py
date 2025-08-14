@@ -45,4 +45,4 @@ def create_report(db: Session, report: report_schema.ReportCreate, user_id: uuid
     db.add(db_image)
     db.commit()
 
-    return db_report
+    return db_report, image_path

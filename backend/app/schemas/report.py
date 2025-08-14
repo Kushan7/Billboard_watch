@@ -15,6 +15,7 @@ class Report(BaseModel):
     latitude: float
     longitude: float
     status: str
+    anonymized_image_url: str | None = None # Add this line
 
     class Config:
         from_attributes = True # Replaces orm_mode = True

@@ -5,27 +5,32 @@ import uuid
 from fastapi import UploadFile
 import shutil
 from pathlib import Path
+import json
+from shapely.geometry import shape, Point
 
-# --- Import all our analysis tools ---
-from transformers import pipeline
-from google.cloud import vision
-from .banned_words import check_text_for_violations
-from .analysis_service import check_gis_violation # We'll reuse the GIS check
-
-# --- Load Models ---
-text_classifier = pipeline('text-classification', model='unitary/toxic-bert')
+# --- Setup for Image Saving and GIS Check ---
 IMAGE_DIR = Path("uploaded_images")
 IMAGE_DIR.mkdir(exist_ok=True)
+GIS_DATA_PATH = Path("gis_data/no_hoarding_zones.geojson")
 
-def perform_ocr(image_path: Path) -> str:
-    """Detects text in the image file using Google Cloud Vision."""
-    client = vision.ImageAnnotatorClient()
-    with open(image_path, "rb") as image_file:
-        content = image_file.read()
-    image = vision.Image(content=content)
-    response = client.text_detection(image=image)
-    texts = response.text_annotations
-    return texts[0].description if texts else ""
+def check_gis_violation(latitude: float, longitude: float) -> bool:
+    """
+    Checks if the given coordinates fall within a prohibited zone.
+    """
+    try:
+        with open(GIS_DATA_PATH) as f:
+            geojson_data = json.load(f)
+
+        point = Point(longitude, latitude) # GeoJSON is (lon, lat)
+
+        for feature in geojson_data['features']:
+            polygon = shape(feature['geometry'])
+            if polygon.contains(point):
+                return True # Violation found
+        return False # No violation
+    except Exception:
+        # If file is not found or invalid, assume no violation
+        return False
 
 def save_upload_file(upload_file: UploadFile, destination: Path) -> None:
     """Saves an uploaded file to a destination."""
@@ -37,7 +42,7 @@ def save_upload_file(upload_file: UploadFile, destination: Path) -> None:
 
 def create_report(db: Session, report: report_schema.ReportCreate, user_id: uuid.UUID, image: UploadFile):
     """
-    Creates a new report, saves its image, and runs the full analysis pipeline.
+    Creates a new report, saves its image, and runs ONLY the GIS analysis.
     """
     db_report = models.Report(
         latitude=report.latitude,
@@ -55,24 +60,16 @@ def create_report(db: Session, report: report_schema.ReportCreate, user_id: uuid
     db_image = models.Image(report_id=db_report.report_id, anonymized_image_url=str(image_path))
     db.add(db_image)
 
-    # --- RUN ANALYSIS PIPELINE ---
+    # --- RUN SIMPLIFIED ANALYSIS PIPELINE ---
     analysis_results = {}
 
-    # 1. Text Analysis (OCR + BERT)
-    try:
-        detected_text = perform_ocr(image_path)
-        if detected_text:
-            text_violations = text_classifier(detected_text)
-            analysis_results['text_analysis'] = {
-                "detected_text": detected_text[:200] + "...",
-                "violations": [res for res in text_violations if res['label'] != 'clean' and res['score'] > 0.8]
-            }
-        else:
-            analysis_results['text_analysis'] = "No text found"
-    except Exception as e:
-        analysis_results['text_analysis'] = f"Error: {e}"
+    # 1. Object Recognition is BYPASSED
+    analysis_results['object_detection'] = "Bypassed for prototype"
 
-    # 2. GIS Analysis
+    # 2. Text Analysis is BYPASSED
+    analysis_results['text_analysis'] = "Bypassed for prototype"
+
+    # 3. GIS Analysis
     gis_violation = check_gis_violation(db_report.latitude, db_report.longitude)
     analysis_results['gis_analysis'] = {
         "is_in_prohibited_zone": gis_violation

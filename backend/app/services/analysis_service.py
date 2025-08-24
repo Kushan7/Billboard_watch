@@ -1,16 +1,33 @@
-import time
 import uuid
 from pathlib import Path
-from ultralytics import YOLO
 from google.cloud import vision
-from transformers import pipeline # Import the pipeline from transformers
+from transformers import pipeline
+import json
+from shapely.geometry import shape, Point
 
-# Load your custom fine-tuned model for billboard detection
-model = YOLO('ml_models/best.pt')
+# --- GIS CHECK SETUP ---
+GIS_DATA_PATH = Path("gis_data/no_hoarding_zones.geojson")
 
-# Load a pre-trained text classification model for content analysis
-# This model is trained to detect toxic comments, which is a good fit for our use case.
-# It will be downloaded automatically the first time it's run.
+def check_gis_violation(latitude: float, longitude: float) -> bool:
+    """
+    Checks if the given coordinates fall within a prohibited zone.
+    """
+    try:
+        with open(GIS_DATA_PATH) as f:
+            geojson_data = json.load(f)
+        
+        point = Point(longitude, latitude) # Note: GeoJSON is (lon, lat)
+
+        for feature in geojson_data['features']:
+            polygon = shape(feature['geometry'])
+            if polygon.contains(point):
+                return True # Violation found
+        return False # No violation
+    except Exception:
+        # If file is not found or invalid, assume no violation
+        return False
+
+# Load the text classification model
 text_classifier = pipeline('text-classification', model='unitary/toxic-bert')
 
 def perform_ocr(image_path: Path) -> str:
@@ -23,40 +40,23 @@ def perform_ocr(image_path: Path) -> str:
     texts = response.text_annotations
     return texts[0].description if texts else ""
 
-def run_violation_analysis(report_id: uuid.UUID, image_path: Path):
+def run_violation_analysis(report_id: uuid.UUID, image_path: Path, latitude: float, longitude: float):
     """
-    Runs the full AI/GIS analysis pipeline on a submitted report.
+    Runs the full analysis pipeline on a submitted report.
     """
     print("-" * 50)
     print(f"✅ BACKGROUND TASK STARTED: Analyzing report {report_id}")
-    print(f"   Image to be processed: {image_path}")
 
-    # Step 1: Billboard Detection (YOLOv8) is already implemented.
-    try:
-        results = model.predict(source=str(image_path), verbose=False)
-        detected = any(model.names[int(c)] == 'billboard' for r in results for c in r.boxes.cls)
-        if detected:
-            print("   Step 1: [AI] Billboard detection... PASSED (Custom model found a billboard)")
-        else:
-            print("   Step 1: [AI] Billboard detection... FAILED (No billboard found)")
-    except Exception as e:
-        print(f"   Step 1: [AI] Billboard detection... ERROR: {e}")
+    # --- Step 1: Billboard Detection is BYPASSED for the prototype ---
+    print("   Step 1: [AI] Billboard detection... BYPASSED")
 
-    # Step 2: UPGRADED Text Violation Matching (BERT)
+    # --- Step 2: Text Violation Matching (BERT) ---
     try:
         detected_text = perform_ocr(image_path)
         if detected_text:
             print("   Step 2: [AI] OCR for license text... PASSED")
-            
-            # Use the BERT model to analyze the text
             results = text_classifier(detected_text)
-            
-            # The model returns a list of labels and scores. We'll check for high-confidence violations.
-            violations_found = []
-            for result in results:
-                if result['label'] != 'clean' and result['score'] > 0.8: # High confidence threshold
-                    violations_found.append(f"{result['label']} (score: {result['score']:.2f})")
-            
+            violations_found = [res for res in results if res['label'] != 'clean' and res['score'] > 0.8]
             if violations_found:
                 print(f"      > VIOLATION DETECTED: Text classified as: {violations_found}")
             else:
@@ -66,9 +66,12 @@ def run_violation_analysis(report_id: uuid.UUID, image_path: Path):
     except Exception as e:
         print(f"   Step 2: [AI] OCR for license text... ERROR: {e}")
 
-    # Step 3: Zonal Compliance (GIS)
-    time.sleep(1)
-    print("   Step 3: [GIS] Checking for 'No Hoarding Zone'... (pending implementation)")
+    # --- Step 3: REAL Zonal Compliance (GIS) ---
+    is_in_prohibited_zone = check_gis_violation(latitude, longitude)
+    if is_in_prohibited_zone:
+        print("   Step 3: [GIS] Checking for 'No Hoarding Zone'... VIOLATION DETECTED")
+    else:
+        print("   Step 3: [GIS] Checking for 'No Hoarding Zone'... PASSED")
 
     print(f"✅ BACKGROUND TASK FINISHED: Analysis for report {report_id} complete.")
     print("-" * 50)

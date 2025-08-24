@@ -13,3 +13,4 @@ ultralytics
 Pillow
 google-cloud-vision
 transformers[torch]
+Shapely

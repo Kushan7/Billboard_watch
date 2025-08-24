@@ -33,6 +33,12 @@ def submit_new_report(
     )
 
     # Add the analysis function to the background tasks
-    background_tasks.add_task(analysis_service.run_violation_analysis, new_report.report_id, image_path)
+    background_tasks.add_task(
+    analysis_service.run_violation_analysis, 
+    new_report.report_id, 
+    image_path, 
+    new_report.latitude, 
+    new_report.longitude
+)
 
     return new_report

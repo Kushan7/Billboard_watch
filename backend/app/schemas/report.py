@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 import uuid
 from datetime import datetime
+from typing import Any
 
 # Data received from the user when creating a report
 class ReportCreate(BaseModel):
@@ -16,6 +17,7 @@ class Report(BaseModel):
     longitude: float
     status: str
     anonymized_image_url: str | None = None # Add this line
+    violation_details: dict[str, Any] | None = None
 
     class Config:
         from_attributes = True # Replaces orm_mode = True

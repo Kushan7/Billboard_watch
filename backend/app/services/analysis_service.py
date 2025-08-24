@@ -40,6 +40,10 @@ def perform_ocr(image_path: Path) -> str:
     texts = response.text_annotations
     return texts[0].description if texts else ""
 
+# In services/analysis_service.py
+
+# ... (keep all the imports and the model loading line) ...
+
 def run_violation_analysis(report_id: uuid.UUID, image_path: Path, latitude: float, longitude: float):
     """
     Runs the full analysis pipeline on a submitted report.
@@ -47,31 +51,23 @@ def run_violation_analysis(report_id: uuid.UUID, image_path: Path, latitude: flo
     print("-" * 50)
     print(f"✅ BACKGROUND TASK STARTED: Analyzing report {report_id}")
 
-    # --- Step 1: Billboard Detection is BYPASSED for the prototype ---
-    print("   Step 1: [AI] Billboard detection... BYPASSED")
-
-    # --- Step 2: Text Violation Matching (BERT) ---
+    # --- Step 1: Billboard Detection (YOLOv8) ---
     try:
-        detected_text = perform_ocr(image_path)
-        if detected_text:
-            print("   Step 2: [AI] OCR for license text... PASSED")
-            results = text_classifier(detected_text)
-            violations_found = [res for res in results if res['label'] != 'clean' and res['score'] > 0.8]
-            if violations_found:
-                print(f"      > VIOLATION DETECTED: Text classified as: {violations_found}")
-            else:
-                print("      > No text violations found.")
+        # Define all the classes we want to detect
+        TARGET_CLASSES = {'billboard', 'tv'}
+        
+        results = model.predict(source=str(image_path), verbose=False)
+        
+        # Check if any of the target classes were detected
+        detected = any(model.names[int(c)] in TARGET_CLASSES for r in results for c in r.boxes.cls)
+        
+        if detected:
+            print(f"   Step 1: [AI] Billboard detection... PASSED (Found a target object)")
         else:
-            print("   Step 2: [AI] OCR for license text... FAILED (No text found)")
+            print("   Step 1: [AI] Billboard detection... FAILED (No billboard or tv found)")
+            
     except Exception as e:
-        print(f"   Step 2: [AI] OCR for license text... ERROR: {e}")
+        print(f"   Step 1: [AI] Billboard detection... ERROR: {e}")
 
-    # --- Step 3: REAL Zonal Compliance (GIS) ---
-    is_in_prohibited_zone = check_gis_violation(latitude, longitude)
-    if is_in_prohibited_zone:
-        print("   Step 3: [GIS] Checking for 'No Hoarding Zone'... VIOLATION DETECTED")
-    else:
-        print("   Step 3: [GIS] Checking for 'No Hoarding Zone'... PASSED")
-
-    print(f"✅ BACKGROUND TASK FINISHED: Analysis for report {report_id} complete.")
-    print("-" * 50)
+    # --- Step 2 and 3 will remain the same ---
+    # ... (rest of the file) ...

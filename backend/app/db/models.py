@@ -41,6 +41,7 @@ class Report(Base):
     longitude = Column(DECIMAL, nullable=False)
     status = Column(SAEnum(ReportStatus), default=ReportStatus.PENDING)
     violation_flags = Column(JSONB) # e.g., {"unlicensed_agency": true, "prohibited_zone": false}
+    violation_details = Column(JSONB, nullable=True)
 
     user = relationship("User", back_populates="reports")
     images = relationship("Image", back_populates="report", cascade="all, delete-orphan")
